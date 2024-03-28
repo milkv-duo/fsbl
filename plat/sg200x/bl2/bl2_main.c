@@ -8,6 +8,10 @@
 #include <delay_timer.h>
 #include <rom_api.h>
 
+#define UART_DLL 0x04140000
+#define UART_DLH 0x04140004
+#define UART_LCR 0x0414000C
+
 #ifdef RTOS_ENABLE_FREERTOS
 int init_comm_info(int ret)
 {
@@ -48,6 +52,22 @@ int dec_verify_image(const void *image, size_t size, size_t dec_skip, struct fip
 }
 #endif
 
+void set_baudrate()
+{
+	// 14 for 115200, 13 for 128000
+	int baud_divisor = 14;
+
+	// set DLAB to 1 to set dll and dlh
+	*(volatile uint32_t*)(UART_LCR) |= (uint32_t)0x80;
+
+	// set divisor
+	*(volatile uint32_t*)(UART_DLL) = (uint32_t)(baud_divisor & 0xff);
+	*(volatile uint32_t*)(UART_DLH) = (uint32_t)((baud_divisor >> 8) & 0xff);
+
+	// set DLAB back to 0
+	*(volatile uint32_t*)(UART_LCR) &= (uint32_t)(~0x80);
+}
+
 void bl2_main(void)
 {
 	enum CHIP_CLK_MODE mode;
@@ -56,6 +76,8 @@ void bl2_main(void)
 	if (v == BOOT_SRC_UART) {
 		console_init(0, PLAT_UART_CLK_IN_HZ, UART_DL_BAUDRATE);
 	}
+
+	set_baudrate();
 
 	ATF_STATE = ATF_STATE_BL2_MAIN;
 	time_records->fsbl_start = read_time_ms();
